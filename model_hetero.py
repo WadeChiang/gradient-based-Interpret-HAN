@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dgl.nn.pytorch import GATConv
+from hook import Hook
 
 
 class SemanticAttention(nn.Module):
@@ -87,6 +88,9 @@ class HANLayer(nn.Module):
         self._cached_graph = None
         self._cached_coalesced_graph = {}
 
+    def grad_hook(self, grad):
+        self.attention_feature_grad = grad
+
     def forward(self, g, h):
         semantic_embeddings = []
 
@@ -97,22 +101,19 @@ class HANLayer(nn.Module):
                 self._cached_coalesced_graph[
                     meta_path
                 ] = dgl.metapath_reachable_graph(g, meta_path)
-        # print(self._cached_coalesced_graph)
         for i, meta_path in enumerate(self.meta_paths):
             new_g = self._cached_coalesced_graph[meta_path]
             semantic_embeddings.append(self.gat_layers[i](new_g, h).flatten(1))
-        print(semantic_embeddings[0].shape,len(semantic_embeddings))
         semantic_embeddings = torch.stack(
             semantic_embeddings, dim=1
         )  # (N, M, D * K)
-        # print(semantic_embeddings.shape)
 
         return self.semantic_attention(semantic_embeddings)  # (N, D * K)
 
 
 class HAN(nn.Module):
     def __init__(
-        self, meta_paths, in_size, hidden_size, out_size, num_heads, dropout
+            self, meta_paths, in_size, hidden_size, out_size, num_heads, dropout
     ):
         super(HAN, self).__init__()
         self.input_features = None
@@ -131,8 +132,11 @@ class HAN(nn.Module):
                 )
             )
         self.predict = nn.Linear(hidden_size * num_heads[-1], out_size)
+        self.hooks = []
 
     def forward(self, g, h):
+        for i in range(2):
+            self.hooks.append(Hook(self.layers[0].gat_layers[i]))
         h.requires_grad = True
         self.input_features = h
         for gnn in self.layers:

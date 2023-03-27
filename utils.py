@@ -186,7 +186,7 @@ def load_acm(remove_self_loop):
 def load_acm_raw(remove_self_loop):
     assert not remove_self_loop
     url = "dataset/ACM.mat"
-    data_path = get_download_dir() + "/ACM.mat"
+    data_path = ".\\data\\ACM.mat"
     # download(_get_dgl_url(url), path=data_path)
 
     data = sio.loadmat(data_path)
@@ -237,11 +237,13 @@ def load_acm_raw(remove_self_loop):
     train_idx = np.where(float_mask <= 0.2)[0]
     val_idx = np.where((float_mask > 0.2) & (float_mask <= 0.3))[0]
     test_idx = np.where(float_mask > 0.3)[0]
+    interpret_idx = np.where(float_mask > 0.95)[0]
 
     num_nodes = hg.number_of_nodes("paper")
     train_mask = get_binary_mask(num_nodes, train_idx)
     val_mask = get_binary_mask(num_nodes, val_idx)
     test_mask = get_binary_mask(num_nodes, test_idx)
+    interpret_mask = get_binary_mask(num_nodes, interpret_idx)
 
     return (
         hg,
@@ -251,9 +253,11 @@ def load_acm_raw(remove_self_loop):
         train_idx,
         val_idx,
         test_idx,
+        interpret_idx,
         train_mask,
         val_mask,
         test_mask,
+        interpret_mask
     )
 
 
