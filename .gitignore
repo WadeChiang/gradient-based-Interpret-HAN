@@ -132,5 +132,5 @@ dmypy.json
 # pycharm
 .idea/
 
-#pycache
+# pycache
 __pycache__/

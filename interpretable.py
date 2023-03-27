@@ -1,5 +1,5 @@
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as
 import numpy as np
 
 from model_hetero import HAN
@@ -19,7 +19,7 @@ def contrastive_gradient(model, logits, mask, idx):
         saliencys.append(F.relu(model.input_features.grad).sum(dim=1))
         model.input_features.grad = None
     saliencys = torch.stack(saliencys)
-    torch.save(saliencys, 'saliency.pt')
+    torch.save(saliencys, '.\\out\\saliency.pt')
 
 
 def grad_cam(model: HAN, logits, mask, idx):
@@ -43,7 +43,7 @@ def grad_cam(model: HAN, logits, mask, idx):
         # print(one_row_heats.shape)
         heatmap = torch.cat((heatmap, one_row_heats), dim=2)
         model.zero_grad()
-    torch.save(heatmap, 'heatmap.pt')
+    torch.save(heatmap, '.\\out\\heatmap.pt')
 
 
 device = "cuda:0"
@@ -129,5 +129,5 @@ logits = model(g, features)
 contrastive_gradient(model, logits, interpret_mask, interpret_idx)
 grad_cam(model, logits, interpret_mask, interpret_idx)
 
-np.save('idx.npy', interpret_idx)
-torch.save(interpret_mask, 'mask.pt')
+np.save('.\\out\\idx.npy', interpret_idx)
+torch.save(interpret_mask, '.\\out\\mask.pt')
