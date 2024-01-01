@@ -67,6 +67,7 @@ class HANLayer(nn.Module):
         super(HANLayer, self).__init__()
 
         # One GAT layer for each meta path based adjacency matrix
+        self.attention_feature_grad = None
         self.gat_layers = nn.ModuleList()
         for i in range(len(meta_paths)):
             self.gat_layers.append(

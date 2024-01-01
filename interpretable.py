@@ -1,7 +1,7 @@
 import torch
-import torch.nn.functional as
+import torch.nn.functional as F
 import numpy as np
-
+import dgl
 from model_hetero import HAN
 from utils import load_data
 from hook import Hook
@@ -22,28 +22,35 @@ def contrastive_gradient(model, logits, mask, idx):
     torch.save(saliencys, '.\\out\\saliency.pt')
 
 
-def grad_cam(model: HAN, logits, mask, idx):
+def grad_cam(model: HAN, logits, mask, idx, subg):
     _, indices = torch.max(logits[mask], dim=1)
 
     idx = torch.from_numpy(idx).to('cuda:0')
     indexes = torch.stack([idx, indices], dim=1)
-    heatmap = torch.empty((4025, 2, 0)).cuda()
-
+    heatmap = []
     for index in indexes:
         logits[index[0], index[1]].backward(retain_graph=True)
-        one_row_heats = [torch.empty(0).cuda(), torch.empty(0).cuda()]
+        one_row_heats = []
         for i in range(2):
+            one_row_heats.append([])
             alphas = torch.mean(model.hooks[i].grad, axis=0)
             for n in range(model.hooks[i].output.shape[0]):
-                one_row_heats[i] = torch.cat((one_row_heats[i], F.relu(alphas @ model.hooks[i].output[n]).reshape(1)))
-            one_row_heats[i] = one_row_heats[i].reshape((4025, 1, 1))
-        # print(one_row_heats[0].shape)
-        one_row_heats = torch.cat(one_row_heats, dim=1)
-        one_row_heats = torch.softmax(one_row_heats, dim=1)
-        # print(one_row_heats.shape)
-        heatmap = torch.cat((heatmap, one_row_heats), dim=2)
+                one_row_heats[i].append(F.relu(alphas @ model.hooks[i].output[n]))
+            one_row_heats[i] = torch.stack(one_row_heats[i])
+            neighbor = subg[i].successors(index[0])
+            nodes = torch.cat((torch.tensor([index[0]]).cuda(), neighbor))
+            nodes = torch.unique(nodes)
+            one_row_heats[i] = torch.mean(one_row_heats[i][nodes])
+        # regularization and softmax
+        one_row_heats = torch.stack(one_row_heats)
+        min_idx = torch.argmin(one_row_heats)
+        one_row_heats[min_idx] *= (1 / one_row_heats[1 - min_idx])
+        one_row_heats[1 - min_idx] = 1
+        one_row_heats = torch.softmax(one_row_heats, dim=0)
+        heatmap.append(one_row_heats)
         model.zero_grad()
-    torch.save(heatmap, '.\\out\\heatmap.pt')
+    heatmap = torch.stack(heatmap)
+    torch.save(heatmap, '.\\out\\softmax.pt')
 
 
 device = "cuda:0"
@@ -65,12 +72,16 @@ default_configure = {
     train_idx,
     val_idx,
     test_idx,
-    interpret_idx,
+    _,
     train_mask,
     val_mask,
     test_mask,
-    interpret_mask
+    _,
+    _
 ) = load_data("ACMRaw")
+interpret_idx = np.load('.\\out\\idx.npy')
+# interpret_idx = torch.tensor(interpret_idx).to(device)
+interpret_mask = torch.load('.\\out\\mask.pt')
 
 if hasattr(torch, "BoolTensor"):
     train_mask = train_mask.bool()
@@ -122,12 +133,14 @@ model = HAN(
     dropout=default_configure["dropout"],
 ).to(device)
 g = g.to(device)
+meta_paths = [["pa", "ap"], ["pf", "fp"]]
+subg = [dgl.metapath_reachable_graph(g, meta_paths[0]), dgl.metapath_reachable_graph(g, meta_paths[1])]
 
 model.load_state_dict(torch.load(".\\para.pth"))
 model.eval()
 logits = model(g, features)
 contrastive_gradient(model, logits, interpret_mask, interpret_idx)
-grad_cam(model, logits, interpret_mask, interpret_idx)
+grad_cam(model, logits, interpret_mask, interpret_idx, subg)
 
 np.save('.\\out\\idx.npy', interpret_idx)
 torch.save(interpret_mask, '.\\out\\mask.pt')

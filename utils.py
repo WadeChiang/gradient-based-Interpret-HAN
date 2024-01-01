@@ -208,7 +208,7 @@ def load_acm_raw(remove_self_loop):
     p_vs_a = p_vs_a[p_selected]
     p_vs_t = p_vs_t[p_selected]
     p_vs_c = p_vs_c[p_selected]
-
+    p_name = data['P'][p_selected]
     hg = dgl.heterograph(
         {
             ("paper", "pa", "author"): p_vs_a.nonzero(),
@@ -257,7 +257,8 @@ def load_acm_raw(remove_self_loop):
         train_mask,
         val_mask,
         test_mask,
-        interpret_mask
+        interpret_mask,
+        p_name
     )
 
 

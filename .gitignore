@@ -134,3 +134,5 @@ dmypy.json
 
 # pycache
 __pycache__/
+
+graphs/
